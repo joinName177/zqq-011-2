@@ -6,12 +6,14 @@ export interface WeatherUIHandlers {
   onResetData: () => void;
   onSubmitLog: (tag: string, intensity: number, note: string) => void;
   onSelectRecord: (record: MoodRecord) => void;
+  onReturnToLatest: () => void;
 }
 
 export function renderWeatherApp(
   container: HTMLElement,
   chartData: SynopticChartData,
   isModalOpen: boolean,
+  isDetailOpen: boolean,
   selectedTag: string,
   selectedIntensity: number,
   noteText: string,
@@ -19,7 +21,8 @@ export function renderWeatherApp(
   onCloseModal: () => void,
   onTagChange: (tag: string) => void,
   onIntensityChange: (val: number) => void,
-  onNoteChange: (val: string) => void
+  onNoteChange: (val: string) => void,
+  onCloseDetail: () => void
 ) {
   const cur = chartData.currentRecord;
   const meta = TAG_METAS[cur.tag] || TAG_METAS['阴转多云'];
@@ -139,6 +142,23 @@ export function renderWeatherApp(
           : ''
       }
 
+      ${
+        chartData.isFocusingHistory
+          ? `
+        <div class="focus-banner">
+          <div class="focus-banner-left">
+            <span class="focus-tag">🔎 历史观测点</span>
+            <strong>${cur.date} · ${esc(cur.tag)}</strong>
+            <span style="font-size:13px;color:var(--met-text);">
+              当前天气、气压带、趋势与自愈指南均以该记录为观测终点
+            </span>
+          </div>
+          <button type="button" class="btn-return-latest" id="btnReturnLatest">↩ 回到最新观测</button>
+        </div>
+      `
+          : ''
+      }
+
       <div class="met-grid">
         <!-- Left: Synoptic Chart & Telemetry -->
         <main class="synoptic-box">
@@ -187,19 +207,22 @@ export function renderWeatherApp(
 
           <!-- Recent Days Sequence Strip -->
           <div class="timeline-section">
-            <h3>📅 近期气象观测序列 (点击切换观测标本)</h3>
+            <h3>📅 近期气象观测序列 (点击切换观测标本，可连续向前/向后选择)</h3>
             <div class="records-strip">
               ${chartData.records
-                .map(
-                  r => `
-                <div class="record-pill ${r.id === cur.id ? 'active' : ''}" data-id="${r.id}">
+                .map(r => {
+                  const beyondFocus =
+                    chartData.isFocusingHistory &&
+                    new Date(r.date).getTime() > new Date(cur.date).getTime();
+                  return `
+                <div class="record-pill ${r.id === cur.id ? 'active' : ''} ${beyondFocus ? 'beyond-focus' : ''}" data-id="${r.id}">
                   <div class="pill-date">${r.date.slice(5)}</div>
                   <div class="pill-icon">${(TAG_METAS[r.tag] || TAG_METAS['阴转多云']).icon}</div>
                   <div class="pill-tag">${esc(r.tag)}</div>
                   <div class="pill-pressure">${r.pressureHpa} hPa</div>
                 </div>
-              `
-                )
+              `;
+                })
                 .join('')}
             </div>
           </div>
@@ -324,16 +347,70 @@ export function renderWeatherApp(
       `
           : ''
       }
+
+      <!-- Modal: Focused Record Detail -->
+      ${
+        isDetailOpen
+          ? `
+        <div class="modal-backdrop" id="detailBackdrop">
+          <div class="modal-dialog detail-dialog">
+            <h3>🔎 历史观测标本详情</h3>
+
+            <div class="detail-identity">
+              <span class="detail-icon">${meta.icon}</span>
+              <div>
+                <div class="detail-date">${cur.date}</div>
+                <div class="detail-tag">${esc(cur.tag)} · 对流强度 ${cur.intensity}/10</div>
+              </div>
+              <span class="detail-id">${esc(cur.id)}</span>
+            </div>
+
+            <div class="detail-grid">
+              <div class="detail-cell">
+                <span class="detail-lbl">心境气压</span>
+                <span class="detail-val" style="color:var(--met-cyan);">${cur.pressureHpa} hPa</span>
+              </div>
+              <div class="detail-cell">
+                <span class="detail-lbl">情绪温度</span>
+                <span class="detail-val" style="color:var(--met-gold);">${cur.temperatureC} °C</span>
+              </div>
+              <div class="detail-cell">
+                <span class="detail-lbl">心理湿度</span>
+                <span class="detail-val" style="color:var(--met-blue);">${cur.humidityPercent}%</span>
+              </div>
+              <div class="detail-cell">
+                <span class="detail-lbl">思绪风场</span>
+                <span class="detail-val">${cur.windDirectionName}风 · ${cur.windSpeedKmH} km/h</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>当时观测记录与心绪注记：</label>
+              <div class="detail-note">${esc(cur.note)}</div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-reset" id="btnDetailReturnLatest">↩ 回到最新观测</button>
+              <button type="button" class="btn-record-mood" id="btnDetailClose">继续查看此观测点</button>
+            </div>
+          </div>
+        </div>
+      `
+          : ''
+      }
     </div>
   `;
 
   // Attach event listeners
   container.querySelector('#btnOpenLog')?.addEventListener('click', handlers.onOpenLogModal);
   container.querySelector('#btnReset')?.addEventListener('click', handlers.onResetData);
+  container.querySelector('#btnReturnLatest')?.addEventListener('click', handlers.onReturnToLatest);
 
   container.querySelectorAll('.record-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const id = pill.getAttribute('data-id');
+      // Always resolve against the full timeline so forward/backward
+      // consecutive selections keep a stable identity.
       const rec = chartData.records.find(r => r.id === id);
       if (rec) handlers.onSelectRecord(rec);
     });
@@ -370,6 +447,16 @@ export function renderWeatherApp(
 
     container.querySelector('#btnSubmitModal')?.addEventListener('click', () => {
       handlers.onSubmitLog(selectedTag, selectedIntensity, noteText);
+    });
+  }
+
+  if (isDetailOpen) {
+    container.querySelector('#btnDetailClose')?.addEventListener('click', onCloseDetail);
+    container.querySelector('#btnDetailReturnLatest')?.addEventListener('click', handlers.onReturnToLatest);
+    container.querySelector('#detailBackdrop')?.addEventListener('click', e => {
+      if (e.target === container.querySelector('#detailBackdrop')) {
+        onCloseDetail();
+      }
     });
   }
 }

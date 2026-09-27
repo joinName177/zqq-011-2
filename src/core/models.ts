@@ -59,6 +59,10 @@ export interface SynopticChartData {
   chartId: string;
   generatedDate: string;
   currentRecord: MoodRecord;
+  /** Id of the record the user is inspecting; null means the latest record. */
+  focusedRecordId: string | null;
+  /** True when the focus is any record other than the latest one. */
+  isFocusingHistory: boolean;
   records: MoodRecord[];
   averagePressure: number;
   zones: BarometricZone[];

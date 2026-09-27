@@ -119,12 +119,32 @@ export function createRecordFromTag(tag: string, intensity: number, note: string
   };
 }
 
-export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData {
-  const sorted = [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const currentRecord = sorted[sorted.length - 1] || createRecordFromTag('阴转多云', 5, '默认天气');
+export function evaluateSynopticSystem(records: MoodRecord[], focusedRecordId?: string | null): SynopticChartData {
+  // `sorted` is the authoritative full timeline and is returned verbatim so
+  // the UI keeps every pill available regardless of the current focus.
+  const sorted = [...records].sort((a, b) => {
+    const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
+    if (byDate !== 0) return byDate;
+    // Stable tie-breaker for same-date records.
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 
-  const totalPressure = sorted.reduce((acc, r) => acc + r.pressureHpa, 0);
-  const avgPressure = Math.round(totalPressure / sorted.length);
+  // Resolve the focused record by identity, never by mutating the record set.
+  // Fall back to the latest record (and finally to a synthesized default).
+  const fallbackRecord = sorted[sorted.length - 1] || createRecordFromTag('阴转多云', 5, '默认天气');
+  const focusedIndex = focusedRecordId
+    ? sorted.findIndex(r => r.id === focusedRecordId)
+    : -1;
+  const currentRecord = focusedIndex >= 0 ? sorted[focusedIndex] : fallbackRecord;
+
+  // The statistical window is every observation up to and including the
+  // focused one (same-date siblings preceding the focus are included by
+  // position), so zones / monsoon / alerts all describe the same instant.
+  const windowEnd = focusedIndex >= 0 ? focusedIndex : sorted.length - 1;
+  const windowRecords = sorted.slice(0, windowEnd + 1);
+
+  const totalPressure = windowRecords.reduce((acc, r) => acc + r.pressureHpa, 0);
+  const avgPressure = windowRecords.length > 0 ? Math.round(totalPressure / windowRecords.length) : currentRecord.pressureHpa;
 
   // Barometric zones analysis
   let equatorial = 0; // high intensity + low/moderate pressure
@@ -132,14 +152,14 @@ export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData
   let subPolar = 0; // low pressure sad/fog
   let polarCold = 0; // high pressure freezing/detached
 
-  sorted.forEach(r => {
+  windowRecords.forEach(r => {
     if (r.pressureHpa >= 1020 && r.temperatureC > 15) subTropical++;
     else if (r.pressureHpa >= 1020 && r.temperatureC <= 10) polarCold++;
     else if (r.pressureHpa <= 995) subPolar++;
     else equatorial++;
   });
 
-  const total = sorted.length || 1;
+  const total = windowRecords.length || 1;
   const zones: BarometricZone[] = [
     {
       code: 'Z-STH',
@@ -179,8 +199,8 @@ export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData
     }
   ];
 
-  // Monsoon trend analysis
-  const recentSlice = sorted.slice(-7);
+  // Monsoon trend analysis — recent observations relative to the focused one.
+  const recentSlice = windowRecords.slice(-7);
   const avgIntensity = recentSlice.reduce((s, r) => s + r.intensity, 0) / (recentSlice.length || 1);
   const hasStorm = recentSlice.some(r => r.pressureHpa < 985);
 
@@ -273,10 +293,15 @@ export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData
   else if (alerts.length > 0) pressureSystemType = '锋面气旋多变';
   else pressureSystemType = '深槽低气压阴霾';
 
+  const latestRecord = sorted[sorted.length - 1];
+  const isFocusingHistory = latestRecord !== undefined && currentRecord.id !== latestRecord.id;
+
   return {
     chartId: `SYN-${Date.now().toString(36).toUpperCase()}`,
     generatedDate: new Date().toLocaleDateString('zh-CN'),
     currentRecord,
+    focusedRecordId: currentRecord.id,
+    isFocusingHistory,
     records: sorted,
     averagePressure: avgPressure,
     zones,

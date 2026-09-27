@@ -12,9 +12,13 @@ const repo = new LocalStorageMoodAdapter();
 const metEngine = new MeteorologyEngineAdapter();
 
 let records = repo.getAll();
-let chartData: SynopticChartData = metEngine.generateSynopticChart(records);
+// Selection identity lives here, independent of the derived chart, so it
+// survives consecutive selections and newly inserted records.
+let focusedRecordId: string | null = null;
+let chartData: SynopticChartData = metEngine.generateSynopticChart(records, focusedRecordId);
 
 let isModalOpen = false;
+let isDetailOpen = false;
 let selectedTag = '阴转多云';
 let selectedIntensity = 5;
 let noteText = '';
@@ -36,6 +40,7 @@ function refreshView() {
     rootEl,
     chartData,
     isModalOpen,
+    isDetailOpen,
     selectedTag,
     selectedIntensity,
     noteText,
@@ -49,7 +54,10 @@ function refreshView() {
       },
       onResetData: () => {
         records = repo.resetToSample();
-        chartData = metEngine.generateSynopticChart(records);
+        // Fresh sample sequence carries all-new ids; drop any stale focus.
+        focusedRecordId = null;
+        isDetailOpen = false;
+        chartData = metEngine.generateSynopticChart(records, focusedRecordId);
         refreshView();
       },
       onSubmitLog: (tag: string, intensity: number, note: string) => {
@@ -57,15 +65,31 @@ function refreshView() {
         const newRecord = createRecordFromTag(tag, intensity, note, todayStr);
         repo.add(newRecord);
         records = repo.getAll();
-        chartData = metEngine.generateSynopticChart(records);
+        // Same-date records replace each other in storage; if the focus
+        // pointed at the replaced record it no longer exists, so follow the
+        // new record's identity instead of snapping to "latest" implicitly.
+        // A historical focus on any other record is preserved untouched.
+        if (focusedRecordId && !records.some(r => r.id === focusedRecordId)) {
+          focusedRecordId = newRecord.id;
+        }
+        chartData = metEngine.generateSynopticChart(records, focusedRecordId);
         isModalOpen = false;
+        isDetailOpen = false;
         refreshView();
       },
       onSelectRecord: (record: MoodRecord) => {
-        // Re-generate chart focusing on this record
-        const filtered = records.filter(r => r.date <= record.date);
-        chartData = metEngine.generateSynopticChart(filtered.length > 0 ? filtered : records);
-        chartData.currentRecord = record;
+        // Re-generate chart focusing on this record while keeping the full
+        // timeline available: identity is carried by id, never by filtering
+        // the source record set.
+        focusedRecordId = record.id;
+        isDetailOpen = true;
+        chartData = metEngine.generateSynopticChart(records, focusedRecordId);
+        refreshView();
+      },
+      onReturnToLatest: () => {
+        focusedRecordId = null;
+        isDetailOpen = false;
+        chartData = metEngine.generateSynopticChart(records, focusedRecordId);
         refreshView();
       }
     },
@@ -83,6 +107,10 @@ function refreshView() {
     },
     (note: string) => {
       noteText = note;
+    },
+    () => {
+      isDetailOpen = false;
+      refreshView();
     }
   );
 }

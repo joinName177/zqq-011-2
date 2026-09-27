@@ -157,6 +157,69 @@ body {
   font-size: 11px;
 }
 
+/* Historical-focus indicator banner */
+.focus-banner {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid var(--met-cyan);
+  border-radius: 8px;
+  padding: 12px 18px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.focus-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.focus-tag {
+  background: var(--met-cyan);
+  color: #070d18;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.btn-return-latest {
+  background: var(--met-cyan);
+  color: #070d18;
+  font-weight: 700;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-return-latest:hover {
+  filter: brightness(1.1);
+}
+
+/* Pills that lie after the focused record remain clickable (for forward
+   consecutive selection) but are visually marked as outside the window. */
+.record-pill.beyond-focus {
+  opacity: 0.45;
+}
+
+.record-pill.beyond-focus:hover {
+  opacity: 1;
+}
+
+.record-pill.active {
+  border-color: var(--met-cyan);
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
 /* Grid Layout */
 .met-grid {
   display: grid;
@@ -591,4 +654,85 @@ body {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
+}
+
+/* Focused record detail dialog */
+.detail-dialog {
+  max-width: 560px;
+}
+
+.detail-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--met-card);
+  border: 1px solid var(--met-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.detail-icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.detail-date {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.detail-tag {
+  font-size: 13px;
+  color: var(--met-cyan);
+}
+
+.detail-id {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--met-muted);
+  word-break: break-all;
+  text-align: right;
+  max-width: 140px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detail-cell {
+  background: var(--met-card);
+  border: 1px solid var(--met-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-lbl {
+  font-size: 11px;
+  color: var(--met-muted);
+}
+
+.detail-val {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.detail-note {
+  background: var(--met-card);
+  border: 1px solid var(--met-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--met-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
