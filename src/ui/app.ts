@@ -188,6 +188,16 @@ export function renderWeatherApp(
           <!-- Recent Days Sequence Strip -->
           <div class="timeline-section">
             <h3>📅 近期气象观测序列 (点击切换观测标本)</h3>
+            ${
+              cur.id !== chartData.records[chartData.records.length - 1]?.id
+                ? `
+            <div class="focus-bar">
+              <span class="focus-hint">🔎 正在回溯观测：<strong>${cur.date}</strong> · ${esc(cur.tag)}（气压带/预警/季风摘要均截至该观测点）</span>
+              <button type="button" class="btn-back-latest" id="btnBackLatest">↩ 返回最新观测</button>
+            </div>
+            `
+                : ''
+            }
             <div class="records-strip">
               ${chartData.records
                 .map(
@@ -337,6 +347,11 @@ export function renderWeatherApp(
       const rec = chartData.records.find(r => r.id === id);
       if (rec) handlers.onSelectRecord(rec);
     });
+  });
+
+  container.querySelector('#btnBackLatest')?.addEventListener('click', () => {
+    const latest = chartData.records[chartData.records.length - 1];
+    if (latest) handlers.onSelectRecord(latest);
   });
 
   if (isModalOpen) {

@@ -119,12 +119,20 @@ export function createRecordFromTag(tag: string, intensity: number, note: string
   };
 }
 
-export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData {
+export function evaluateSynopticSystem(records: MoodRecord[], focusRecordId?: string): SynopticChartData {
   const sorted = [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const currentRecord = sorted[sorted.length - 1] || createRecordFromTag('阴转多云', 5, '默认天气');
 
-  const totalPressure = sorted.reduce((acc, r) => acc + r.pressureHpa, 0);
-  const avgPressure = Math.round(totalPressure / sorted.length);
+  // 选中身份锚点：默认观测最新一条；指定 focusRecordId 时以该记录为观测焦点。
+  // 统计窗口为“截至焦点记录（含）”，保证当前天气、气压带、预警、季风摘要同源。
+  const focusIndex = focusRecordId ? sorted.findIndex(r => r.id === focusRecordId) : -1;
+  const currentRecord =
+    focusIndex >= 0
+      ? sorted[focusIndex]
+      : sorted[sorted.length - 1] || createRecordFromTag('阴转多云', 5, '默认天气');
+  const observed = focusIndex >= 0 ? sorted.slice(0, focusIndex + 1) : sorted;
+
+  const totalPressure = observed.reduce((acc, r) => acc + r.pressureHpa, 0);
+  const avgPressure = Math.round(totalPressure / observed.length);
 
   // Barometric zones analysis
   let equatorial = 0; // high intensity + low/moderate pressure
@@ -132,14 +140,14 @@ export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData
   let subPolar = 0; // low pressure sad/fog
   let polarCold = 0; // high pressure freezing/detached
 
-  sorted.forEach(r => {
+  observed.forEach(r => {
     if (r.pressureHpa >= 1020 && r.temperatureC > 15) subTropical++;
     else if (r.pressureHpa >= 1020 && r.temperatureC <= 10) polarCold++;
     else if (r.pressureHpa <= 995) subPolar++;
     else equatorial++;
   });
 
-  const total = sorted.length || 1;
+  const total = observed.length || 1;
   const zones: BarometricZone[] = [
     {
       code: 'Z-STH',
@@ -179,8 +187,8 @@ export function evaluateSynopticSystem(records: MoodRecord[]): SynopticChartData
     }
   ];
 
-  // Monsoon trend analysis
-  const recentSlice = sorted.slice(-7);
+  // Monsoon trend analysis（以焦点记录为窗口末端）
+  const recentSlice = observed.slice(-7);
   const avgIntensity = recentSlice.reduce((s, r) => s + r.intensity, 0) / (recentSlice.length || 1);
   const hasStorm = recentSlice.some(r => r.pressureHpa < 985);
 
